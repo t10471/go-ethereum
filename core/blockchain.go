@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
+	"reflect"
 )
 
 var (
@@ -471,6 +472,8 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) insert(block *types.Block) {
+	fmt.Println("BlockChain insert block number ", block.Number())
+
 	// If the block is on a side chain or an unknown one, force other heads onto it too
 	updateHeads := rawdb.ReadCanonicalHash(bc.db, block.NumberU64()) != block.Hash()
 
@@ -689,6 +692,7 @@ func (bc *BlockChain) procFutureBlocks() {
 		}
 	}
 	if len(blocks) > 0 {
+		fmt.Println("BlockChain procFutureBlocks", len(blocks))
 		types.BlockBy(types.Number).Sort(blocks)
 
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
@@ -890,6 +894,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	currentBlock := bc.CurrentBlock()
 	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
+	fmt.Println("BlockChain WriteBlockWithState ptd, localTd, externTd ", ptd, localTd, externTd)
 
 	// Irrelevant of the canonical status, write the block itself to the database
 	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), externTd); err != nil {
@@ -916,6 +921,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		bc.triegc.Push(root, -float32(block.NumberU64()))
 
 		if current := block.NumberU64(); current > triesInMemory {
+			fmt.Println("BlockChain WriteBlockWithState current ", current)
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
 			var (
 				nodes, imgs = triedb.Size()
@@ -927,6 +933,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			// Find the next state trie we need to commit
 			header := bc.GetHeaderByNumber(current - triesInMemory)
 			chosen := header.Number.Uint64()
+			fmt.Println("BlockChain WriteBlockWithState header chosen", header.Number, chosen)
 
 			// If we exceeded out time allowance, flush an entire trie to disk
 			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
@@ -957,10 +964,13 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	reorg := externTd.Cmp(localTd) > 0
+	fmt.Println("BlockChain WriteBlockWithState reorg 1 ", reorg)
+
 	currentBlock = bc.CurrentBlock()
 	if !reorg && externTd.Cmp(localTd) == 0 {
 		// Split same-difficulty blocks by number, then at random
 		reorg = block.NumberU64() < currentBlock.NumberU64() || (block.NumberU64() == currentBlock.NumberU64() && mrand.Float64() < 0.5)
+		fmt.Println("BlockChain WriteBlockWithState reorg 2 ", reorg)
 	}
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
@@ -983,6 +993,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 
 	// Set new head.
 	if status == CanonStatTy {
+		fmt.Println("BlockChain WriteBlockWithState CanonStatTy")
 		bc.insert(block)
 	}
 	bc.futureBlocks.Remove(block.Hash())
@@ -996,7 +1007,14 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 //
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
+	fmt.Println("BlockChain InsertChain")
+	for _, b  := range chain {
+		fmt.Println("BlockChain InsertChain", b.Number())
+	}
 	n, events, logs, err := bc.insertChain(chain)
+	for _, event := range events {
+		fmt.Println("BlockChain InsertChain PostChainEvents ", reflect.TypeOf(event))
+	}
 	bc.PostChainEvents(events, logs)
 	return n, err
 }
@@ -1069,6 +1087,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		if err == nil {
 			err = bc.Validator().ValidateBody(block)
 		}
+		fmt.Println("BlockChain InsertChain err is ", err)
 		switch {
 		case err == ErrKnownBlock:
 			// Block and state both already known. However if the current block is below
@@ -1085,11 +1104,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			if block.Time().Cmp(max) > 0 {
 				return i, events, coalescedLogs, fmt.Errorf("future block: %v > %v", block.Time(), max)
 			}
+			fmt.Println("BlockChain InsertChain bc.futureBlocks.Add ", block.Number())
 			bc.futureBlocks.Add(block.Hash(), block)
 			stats.queued++
 			continue
 
 		case err == consensus.ErrUnknownAncestor && bc.futureBlocks.Contains(block.ParentHash()):
+			fmt.Println("BlockChain InsertChain bc.futureBlocks.Add ", block.Number())
 			bc.futureBlocks.Add(block.Hash(), block)
 			stats.queued++
 			continue
@@ -1100,6 +1121,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			currentBlock := bc.CurrentBlock()
 			localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 			externTd := new(big.Int).Add(bc.GetTd(block.ParentHash(), block.NumberU64()-1), block.Difficulty())
+			fmt.Println("BlockChain InsertChain localTd, externTd ", localTd, externTd)
 			if localTd.Cmp(externTd) > 0 {
 				if err = bc.WriteBlockWithoutState(block, externTd); err != nil {
 					return i, events, coalescedLogs, err
@@ -1164,8 +1186,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 		switch status {
 		case CanonStatTy:
-			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
+			log.Info("Inserted new block", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "elapsed", common.PrettyDuration(time.Since(bstart)))
+			//log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
+			//	"txs", len(block.Transactions()), "gas", block.GasUsed(), "elapsed", common.PrettyDuration(time.Since(bstart)))
 
 			coalescedLogs = append(coalescedLogs, logs...)
 			blockInsertTimer.UpdateSince(bstart)
@@ -1176,8 +1200,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			bc.gcproc += proctime
 
 		case SideStatTy:
-			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
+			log.Info("Inserted forked block", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
 				common.PrettyDuration(time.Since(bstart)), "txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()))
+			//log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
+			//	common.PrettyDuration(time.Since(bstart)), "txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()))
 
 			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainSideEvent{block})
@@ -1387,6 +1413,7 @@ func (bc *BlockChain) update() {
 		case <-futureTimer.C:
 			bc.procFutureBlocks()
 		case <-bc.quit:
+			fmt.Println("BlockChain quit")
 			return
 		}
 	}

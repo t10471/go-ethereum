@@ -96,6 +96,9 @@ func (t *rlpx) ReadMsg() (Msg, error) {
 }
 
 func (t *rlpx) WriteMsg(msg Msg) error {
+	if msg.Code == 0x12 {
+		fmt.Println("rlpx WriteMsg", msg)
+	}
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 	t.fd.SetWriteDeadline(time.Now().Add(frameWriteTimeout))
@@ -598,6 +601,9 @@ func newRLPXFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
 }
 
 func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
+	if msg.Code == 0x12 {
+		fmt.Println("rlpxFrameRW WriteMsg", msg)
+	}
 	ptype, _ := rlp.EncodeToBytes(msg.Code)
 
 	// if snappy is enabled, compress message now

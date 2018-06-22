@@ -172,6 +172,7 @@ type MsgPipeRW struct {
 // WriteMsg sends a messsage on the pipe.
 // It blocks until the receiver has consumed the message payload.
 func (p *MsgPipeRW) WriteMsg(msg Msg) error {
+	fmt.Println("MsgPipeRW WriteMsg")
 	if atomic.LoadInt32(p.closed) == 0 {
 		consumed := make(chan struct{}, 1)
 		msg.Payload = &eofSignal{msg.Payload, msg.Size, consumed}

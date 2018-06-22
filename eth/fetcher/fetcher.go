@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
+	"fmt"
 )
 
 const (
@@ -319,6 +320,7 @@ func (f *Fetcher) loop() {
 			return
 
 		case notification := <-f.notify:
+			fmt.Println("Fetcher loop notification := <-f.notify")
 			// A block was announced, make sure the peer isn't DOSing us
 			propAnnounceInMeter.Mark(1)
 
@@ -353,16 +355,20 @@ func (f *Fetcher) loop() {
 			}
 
 		case op := <-f.inject:
+			fmt.Println("Fetcher loop op := <-f.inject")
 			// A direct block insertion was requested, try and fill any pending gaps
 			propBroadcastInMeter.Mark(1)
 			f.enqueue(op.origin, op.block)
 
 		case hash := <-f.done:
+			fmt.Println("Fetcher loop hash := <-f.done")
 			// A pending import finished, remove all traces of the notification
 			f.forgetHash(hash)
 			f.forgetBlock(hash)
 
 		case <-fetchTimer.C:
+			fmt.Println("Fetcher loop fetchTimer.C")
+
 			// At least one block's timer ran out, check for needing retrieval
 			request := make(map[string][]common.Hash)
 
@@ -399,6 +405,7 @@ func (f *Fetcher) loop() {
 			f.rescheduleFetch(fetchTimer)
 
 		case <-completeTimer.C:
+			fmt.Println("Fetcher loop <-completeTimer.C")
 			// At least one header's timer ran out, retrieve everything
 			request := make(map[string][]common.Hash)
 
@@ -428,6 +435,7 @@ func (f *Fetcher) loop() {
 			f.rescheduleComplete(completeTimer)
 
 		case filter := <-f.headerFilter:
+			fmt.Println("Fetcher loop filter := <-f.headerFilter")
 			// Headers arrived from a remote peer. Extract those that were explicitly
 			// requested by the fetcher, and return everything else so it's delivered
 			// to other parts of the system.
@@ -506,6 +514,7 @@ func (f *Fetcher) loop() {
 			}
 
 		case filter := <-f.bodyFilter:
+			fmt.Println("Fetcher loop filter := <-f.bodyFilter")
 			// Block bodies arrived, extract any explicitly requested blocks, return the rest
 			var task *bodyFilterTask
 			select {
@@ -650,6 +659,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			return
 		}
 		// Quickly validate the header and propagate the block if it passes
+		fmt.Println("Fetcher insert")
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
 			// All ok, quickly propagate to our peers

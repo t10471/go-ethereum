@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/fatih/set.v0"
+	"reflect"
 )
 
 const (
@@ -133,6 +134,7 @@ type worker struct {
 }
 
 func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
+	fmt.Println("newWorker")
 	worker := &worker{
 		config:         config,
 		engine:         engine,
@@ -251,16 +253,19 @@ func (self *worker) update() {
 		select {
 		// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
+			fmt.Println("worker update recieve chainHeadCh")
 			self.commitNewWork()
 
 		// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
+			fmt.Println("worker update recieve chainSideCh")
 			self.uncleMu.Lock()
 			self.possibleUncles[ev.Block.Hash()] = ev.Block
 			self.uncleMu.Unlock()
 
 		// Handle NewTxsEvent
 		case ev := <-self.txsCh:
+			fmt.Println("worker update txsCh")
 			// Apply transactions to the pending state if we're not mining.
 			//
 			// Note all transactions received may not be continuous with transactions
@@ -303,6 +308,7 @@ func (self *worker) wait() {
 			if result == nil {
 				continue
 			}
+			fmt.Println("worker wait result Block.Number() ", result.Block.Number())
 			block := result.Block
 			work := result.Work
 
@@ -322,6 +328,7 @@ func (self *worker) wait() {
 				continue
 			}
 			// Broadcast the block and announce chain insertion event
+			fmt.Println("worker wait result post NewMinedBlockEvent")
 			self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			var (
 				events []interface{}
@@ -330,6 +337,9 @@ func (self *worker) wait() {
 			events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 			if stat == core.CanonStatTy {
 				events = append(events, core.ChainHeadEvent{Block: block})
+			}
+			for _, event := range events {
+				fmt.Println("worker wait PostChainEvents ", reflect.TypeOf(event))
 			}
 			self.chain.PostChainEvents(events, logs)
 
@@ -341,10 +351,13 @@ func (self *worker) wait() {
 
 // push sends a new work task to currently live miner agents.
 func (self *worker) push(work *Work) {
+	fmt.Println("worker push")
 	if atomic.LoadInt32(&self.mining) != 1 {
 		return
 	}
 	for agent := range self.agents {
+		v := reflect.ValueOf(agent)
+		fmt.Println("worker agent", v.Type())
 		atomic.AddInt32(&self.atWork, 1)
 		if ch := agent.Work(); ch != nil {
 			ch <- work
@@ -354,6 +367,7 @@ func (self *worker) push(work *Work) {
 
 // makeCurrent creates a new environment for the current cycle.
 func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error {
+	fmt.Println("worker makeCurrent")
 	state, err := self.chain.StateAt(parent.Root())
 	if err != nil {
 		return err
@@ -385,6 +399,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 }
 
 func (self *worker) commitNewWork() {
+	fmt.Println("worker commitNewWork")
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	self.uncleMu.Lock()
@@ -414,6 +429,7 @@ func (self *worker) commitNewWork() {
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}
+	fmt.Println("worker commitNewWork making header Number ", header.Number)
 	// Only set the coinbase if we are mining (avoid spurious block rewards)
 	if atomic.LoadInt32(&self.mining) == 1 {
 		header.Coinbase = self.coinbase
@@ -491,6 +507,7 @@ func (self *worker) commitNewWork() {
 }
 
 func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
+	fmt.Println("worker commitUncle")
 	hash := uncle.Hash()
 	if work.uncles.Has(hash) {
 		return fmt.Errorf("uncle not unique")
@@ -506,6 +523,7 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 }
 
 func (self *worker) updateSnapshot() {
+	fmt.Println("worker updateSnapshot")
 	self.snapshotMu.Lock()
 	defer self.snapshotMu.Unlock()
 
@@ -519,6 +537,7 @@ func (self *worker) updateSnapshot() {
 }
 
 func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain, coinbase common.Address) {
+	fmt.Println("worker commitTransactions")
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(env.header.GasLimit)
 	}
@@ -570,6 +589,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			txs.Pop()
 
 		case nil:
+			fmt.Println("worker commitTransactions commitTransaction")
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
@@ -607,6 +627,8 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, c
 	snap := env.state.Snapshot()
 
 	receipt, _, err := core.ApplyTransaction(env.config, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, vm.Config{})
+	fmt.Println("Work commitTransaction receipt")
+	//pp.Print(receipt)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err, nil

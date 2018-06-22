@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"fmt"
 )
 
 type hashrate struct {
@@ -135,6 +136,7 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 // whether the solution was accepted or not (not can be both a bad pow as well as
 // any other error, like no work pending).
 func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.Hash) bool {
+	fmt.Println("RemoteAgent SubmitWork")
 	a.mu.Lock()
 	defer a.mu.Unlock()
 

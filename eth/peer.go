@@ -115,18 +115,21 @@ func (p *peer) broadcast() {
 	for {
 		select {
 		case txs := <-p.queuedTxs:
+			fmt.Println("peer broadcast queuedTxs")
 			if err := p.SendTransactions(txs); err != nil {
 				return
 			}
 			p.Log().Trace("Broadcast transactions", "count", len(txs))
 
 		case prop := <-p.queuedProps:
+			fmt.Println("peer broadcast queuedProps execute SendNewBlock block.Number() ", prop.block.Number())
 			if err := p.SendNewBlock(prop.block, prop.td); err != nil {
 				return
 			}
 			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "td", prop.td)
 
 		case block := <-p.queuedAnns:
+			fmt.Println("peer broadcast queuedAnns SendNewBlockHashes block.Number() ", block.Number())
 			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()}); err != nil {
 				return
 			}
@@ -176,6 +179,7 @@ func (p *peer) SetHead(hash common.Hash, td *big.Int) {
 // MarkBlock marks a block as known for the peer, ensuring that the block will
 // never be propagated to this particular peer.
 func (p *peer) MarkBlock(hash common.Hash) {
+	fmt.Println("peer MarkBlock hash ", hash)
 	// If we reached the memory allowance, drop a previously known block hash
 	for p.knownBlocks.Size() >= maxKnownBlocks {
 		p.knownBlocks.Pop()
@@ -186,6 +190,7 @@ func (p *peer) MarkBlock(hash common.Hash) {
 // MarkTransaction marks a transaction as known for the peer, ensuring that it
 // will never be propagated to this particular peer.
 func (p *peer) MarkTransaction(hash common.Hash) {
+	fmt.Println("peer MarkTransaction")
 	// If we reached the memory allowance, drop a previously known transaction hash
 	for p.knownTxs.Size() >= maxKnownTxs {
 		p.knownTxs.Pop()
@@ -196,6 +201,8 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendTransactions(txs types.Transactions) error {
+	fmt.Println("peer SendTransactions")
+	// If we reached the memory allowance, drop a previously known transaction hash
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
@@ -205,6 +212,7 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 // AsyncSendTransactions queues list of transactions propagation to a remote
 // peer. If the peer's broadcast queue is full, the event is silently dropped.
 func (p *peer) AsyncSendTransactions(txs []*types.Transaction) {
+	fmt.Println("peer AsyncSendTransactions")
 	select {
 	case p.queuedTxs <- txs:
 		for _, tx := range txs {
@@ -243,6 +251,7 @@ func (p *peer) AsyncSendNewBlockHash(block *types.Block) {
 
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
+	fmt.Println("peer SendNewBlock")
 	p.knownBlocks.Add(block.Hash())
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
 }
@@ -250,6 +259,7 @@ func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
 func (p *peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
+	fmt.Println("peer AsyncSendNewBlock")
 	select {
 	case p.queuedProps <- &propEvent{block: block, td: td}:
 		p.knownBlocks.Add(block.Hash())
@@ -415,6 +425,7 @@ func newPeerSet() *peerSet {
 // peer is already known. If a new peer it registered, its broadcast loop is also
 // started.
 func (ps *peerSet) Register(p *peer) error {
+	fmt.Println("peerSet Register")
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
@@ -433,6 +444,7 @@ func (ps *peerSet) Register(p *peer) error {
 // Unregister removes a remote peer from the active set, disabling any further
 // actions to/from that particular entity.
 func (ps *peerSet) Unregister(id string) error {
+	fmt.Println("peerSet Unregister")
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
@@ -448,6 +460,7 @@ func (ps *peerSet) Unregister(id string) error {
 
 // Peer retrieves the registered peer with the given id.
 func (ps *peerSet) Peer(id string) *peer {
+	fmt.Println("peerSet Peer")
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
@@ -465,6 +478,7 @@ func (ps *peerSet) Len() int {
 // PeersWithoutBlock retrieves a list of peers that do not have a given block in
 // their set of known hashes.
 func (ps *peerSet) PeersWithoutBlock(hash common.Hash) []*peer {
+	fmt.Println("peerSet PeersWithoutBlock")
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
@@ -480,6 +494,7 @@ func (ps *peerSet) PeersWithoutBlock(hash common.Hash) []*peer {
 // PeersWithoutTx retrieves a list of peers that do not have a given transaction
 // in their set of known hashes.
 func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
+	fmt.Println("peerSet PeersWithoutTx")
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
@@ -512,6 +527,7 @@ func (ps *peerSet) BestPeer() *peer {
 // Close disconnects all peers.
 // No new peers can be registered after Close has returned.
 func (ps *peerSet) Close() {
+	fmt.Println("peerSet Close")
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 

@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"fmt"
 )
 
 // headerRetriever is used by the unconfirmed block set to verify whether a previously
@@ -60,6 +61,7 @@ func newUnconfirmedBlocks(chain headerRetriever, depth uint) *unconfirmedBlocks 
 
 // Insert adds a new block to the set of unconfirmed ones.
 func (set *unconfirmedBlocks) Insert(index uint64, hash common.Hash) {
+	fmt.Println("unconfirmedBlocks Insert number ", index, "hash ", hash)
 	// If a new block was mined locally, shift out any old enough blocks
 	set.Shift(index)
 
@@ -86,8 +88,15 @@ func (set *unconfirmedBlocks) Insert(index uint64, hash common.Hash) {
 // allowance, checking them against the canonical chain for inclusion or staleness
 // report.
 func (set *unconfirmedBlocks) Shift(height uint64) {
+	fmt.Println("unconfirmedBlocks Shift height ", height)
 	set.lock.Lock()
 	defer set.lock.Unlock()
+
+	if set.blocks == nil {
+		fmt.Println("unconfirmedBlocks Shift set.blocks is nil")
+	} else {
+		fmt.Println("unconfirmedBlocks Shift set.blocks is NOT nil count = ", set.blocks.Len())
+	}
 
 	for set.blocks != nil {
 		// Retrieve the next unconfirmed block and abort if too fresh

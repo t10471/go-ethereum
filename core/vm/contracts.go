@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
+	"fmt"
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -61,6 +62,7 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
+	fmt.Println("RunPrecompiledContract")
 	gas := p.RequiredGas(input)
 	if contract.UseGas(gas) {
 		return p.Run(input)

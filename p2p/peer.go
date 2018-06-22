@@ -380,6 +380,9 @@ type protoRW struct {
 }
 
 func (rw *protoRW) WriteMsg(msg Msg) (err error) {
+	if msg.Code == 0x02 {
+		fmt.Println("protoRW WriteMsg", msg)
+	}
 	if msg.Code >= rw.Length {
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}

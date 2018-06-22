@@ -256,6 +256,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *BlockChain, error) {
+	fmt.Println("newCanonical")
 	var (
 		db      = ethdb.NewMemDatabase()
 		genesis = new(Genesis).MustCommit(db)
